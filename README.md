@@ -1,1 +1,1 @@
-# epetitions-kz-parsers
+# epetitions-kz
