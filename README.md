@@ -3,3 +3,8 @@
 ```
 python scripts/petitions_parser.py
 ```
+  
+Использование парсера comments_parser.py:
+```
+python scripts/comments_parser.py
+```
