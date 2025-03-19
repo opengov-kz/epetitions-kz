@@ -8,3 +8,8 @@ python scripts/petitions_parser.py
 ```
 python scripts/comments_parser.py
 ```
+  
+Использование парсера signers_parser.py:
+```
+python scripts/signers_parser.py
+```
