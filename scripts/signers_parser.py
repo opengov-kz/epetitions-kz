@@ -33,8 +33,21 @@ class SignersParser:
             signers = []
             for i in itertools.count():
                 response = requests.get(f"{self.api_url}{petition_id}/signers",
-                                        params={"size":1000, "page":i},
+                                        params={"size":100, "page":i},
                                         headers=self.headers, timeout=3)
+                if response.status_code == 500:
+                    for j in range(i * 100, (i + 1) * 100):
+                        response = requests.get(f"{self.api_url}{petition_id}/signers",
+                                                params={"size":1, "page":j},
+                                                headers=self.headers, timeout=3)
+                        if response.status_code == 500:
+                            continue
+                        response.raise_for_status()
+                        signers.extend(response.json()["content"])
+                        if response.json()["last"]:
+                            break
+                    continue
+                
                 response.raise_for_status()
                 signers.extend(response.json()["content"])
                 if response.json()["last"]:
@@ -46,9 +59,7 @@ class SignersParser:
             return signers
         except requests.exceptions.Timeout:
             return self.fetch_signers(petition_id)
-        except requests.exceptions.HTTPError as error:
-            if error.response.status_code == 500:
-                return signers
+        except:
             raise
         
     
