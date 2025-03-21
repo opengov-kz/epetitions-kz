@@ -5,7 +5,7 @@ import itertools
 from datetime import datetime
 
 class SignersParser:
-    def __init__(self, api_url="https://epetition.kz/api/public/v1/petitions/"):
+    def __init__(self, api_url="https://epetition.kz/api/public/v1/petitions"):
         """
         Инициализация парсера подписей
 
@@ -32,12 +32,12 @@ class SignersParser:
         try:
             signers = []
             for i in itertools.count():
-                response = requests.get(f"{self.api_url}{petition_id}/signers",
+                response = requests.get(f"{self.api_url}/{petition_id}/signers",
                                         params={"size":100, "page":i},
                                         headers=self.headers, timeout=3)
                 if response.status_code == 500:
                     for j in range(i * 100, (i + 1) * 100):
-                        response = requests.get(f"{self.api_url}{petition_id}/signers",
+                        response = requests.get(f"{self.api_url}/{petition_id}/signers",
                                                 params={"size":1, "page":j},
                                                 headers=self.headers, timeout=3)
                         if response.status_code == 500:
@@ -68,17 +68,20 @@ class SignersParser:
         Получение всех подписей из API
         """
         try:
-            response = requests.get(self.api_url+"short", params={"size":1}, headers=self.headers, timeout=2)
+            response = requests.get(f"{self.api_url}/short",
+                                    params={"size":1},
+                                    headers=self.headers, timeout=2)
             response.raise_for_status()
             
-            totalElements = response.json()["totalElements"]
-            response = requests.get(self.api_url+"short", params={"size":totalElements}, headers=self.headers, timeout=2)
+            response = requests.get(f"{self.api_url}/short",
+                                    params={"size":response.json()["totalElements"]},
+                                    headers=self.headers, timeout=2)
             response.raise_for_status()
-
+            
             all_signers = []
             content = response.json()["content"]
-            for idx, petition in enumerate(content, start=1):
-                print(f"Fetching signers from petition {idx} of {len(content)}")
+            for i, petition in enumerate(content, start=1):
+                print(f"Fetching signers from petition {i} of {len(content)}")
                 all_signers.extend(self.fetch_signers(petition["id"]))
             
             return all_signers

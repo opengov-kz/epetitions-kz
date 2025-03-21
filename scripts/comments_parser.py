@@ -5,7 +5,7 @@ import itertools
 from datetime import datetime
 
 class CommentsParser:
-    def __init__(self, api_url="https://epetition.kz/api/public/v1/petitions/"):
+    def __init__(self, api_url="https://epetition.kz/api/public/v1/petitions"):
         """
         Инициализация парсера комментариев
 
@@ -26,47 +26,51 @@ class CommentsParser:
         Arguments:
         petition_id -- id петиции
         """
-        try:
-            comments = []
-            for i in itertools.count():
-                response = requests.get(f"{self.api_url}{petition_id}/comments",
-                                        params={"size":1000, "page":i},
-                                        headers=self.headers, timeout=3)
-                response.raise_for_status()
-                comments.extend(response.json()["content"])
-                if response.json()["last"]:
-                    break
+        comments = []
+        for i in itertools.count():
+            while True:
+                try:
+                    response = requests.get(f"{self.api_url}/{petition_id}/comments",
+                                            params={"size":1000, "page":i},
+                                            headers=self.headers, timeout=3)
+                    if response.status_code == 200: break
+                    else: raise
+                except requests.exceptions.Timeout:
+                    continue
+                
+            comments.extend(response.json()["content"])
+            if response.json()["last"]: break
             
-            return comments
-        except requests.exceptions.Timeout:
-            return self.fetch_comments(petition_id)
-        except:
-            raise
-        
+        return comments
     
     def fetch_all_comments(self):
         """
         Получение всех комментариев из API
         """
-        try:
-            response = requests.get(self.api_url+"short", params={"size":1}, headers=self.headers, timeout=2)
-            response.raise_for_status()
-            
-            totalElements = response.json()["totalElements"]
-            response = requests.get(self.api_url+"short", params={"size":totalElements}, headers=self.headers, timeout=2)
-            response.raise_for_status()
+        while True:
+            try:
+                response = requests.get(f"{self.api_url}/short",
+                                        params={"size":1},
+                                        headers=self.headers, timeout=2)
+                if response.status_code != 200: raise
+                
+                response = requests.get(f"{self.api_url}/short",
+                                        params={"size":response.json()["totalElements"]},
+                                        headers=self.headers, timeout=2)
+                response.raise_for_status()
+                if response.status_code == 200: break
+                else: raise
 
-            all_comments = []
-            content = response.json()["content"]
-            for idx, petition in enumerate(content, start=1):
-                print(f"Fetching comments from petition {idx} of {len(content)}")
-                all_comments.extend(self.fetch_comments(petition["id"]))
+            except requests.exceptions.Timeout:
+                continue
             
-            return all_comments
-        except requests.exceptions.Timeout:
-            return self.fetch_all_comments()
-        except:
-            raise
+        all_comments = []
+        content = response.json()["content"]
+        for i, petition in enumerate(content, start=1):
+            print(f"Fetching comments from petition {i} of {len(content)}")
+            all_comments.extend(self.fetch_comments(petition["id"]))
+        
+        return all_comments
 
     def save_to_csv(self, all_comments, csv_path):
         """
@@ -76,14 +80,11 @@ class CommentsParser:
         all_comments -- list всех комментариев в формате json
         csv_path -- Путь к CSV файлу
         """
-        try:
-            field_names = all_comments[0].keys()
-            with open(csv_path, 'w', newline='', encoding='utf-8') as csv_file:
-                writer = csv.DictWriter(csv_file, fieldnames=field_names)
-                writer.writeheader()
-                writer.writerows(all_comments)
-        except:
-            raise
+        field_names = all_comments[0].keys()
+        with open(csv_path, 'w', newline='', encoding='utf-8') as csv_file:
+            writer = csv.DictWriter(csv_file, fieldnames=field_names)
+            writer.writeheader()
+            writer.writerows(all_comments)
 
     def run(self, csv_path):
         """
@@ -92,20 +93,14 @@ class CommentsParser:
         Arguments:
         csv_path -- Путь к CSV файлу
         """
-        try:
-            all_comments = self.fetch_all_comments()
-            self.save_to_csv(all_comments, csv_path)
+        all_comments = self.fetch_all_comments()
+        self.save_to_csv(all_comments, csv_path)
+        return all_comments
 
-            return all_comments
-        except:
-            raise
 
 if __name__ == "__main__":
-    try:
-        parser = CommentsParser()
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        parser.run(f"comments_{timestamp}.csv")
-    except:
-        raise
+    parser = CommentsParser()
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    parser.run(f"comments_{timestamp}.csv")
 
 

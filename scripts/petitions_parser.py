@@ -4,7 +4,7 @@ import csv
 from datetime import datetime
 
 class PetitionsParser:
-    def __init__(self, api_url="https://epetition.kz/api/public/v1/petitions/"):
+    def __init__(self, api_url="https://epetition.kz/api/public/v1/petitions"):
         """
         Инициализация парсера петиций
 
@@ -25,40 +25,45 @@ class PetitionsParser:
         Arguments:
         petition_id -- id петиции
         """
-        try:
-            response = requests.get(self.api_url+petition_id, headers=self.headers, timeout=1)
-            response.raise_for_status()
-            
-            return response.json()
-        except requests.exceptions.Timeout:
-            return self.fetch_petition(petition_id)
-        except:
-            raise
+        while True:
+            try:
+                response = requests.get(f"{self.api_url}/{petition_id}", headers=self.headers, timeout=1)
+                if response.status_code == 200: break
+                else: raise
+                
+            except requests.exceptions.Timeout:
+                continue
+        return response.json()
         
     
     def fetch_petitions(self):
         """
         Получение петиций из API
         """
-        try:
-            response = requests.get(self.api_url+"short", params={"size":1}, headers=self.headers, timeout=2)
-            response.raise_for_status()
-            
-            totalElements = response.json()["totalElements"]
-            response = requests.get(self.api_url+"short", params={"size":totalElements}, headers=self.headers, timeout=2)
-            response.raise_for_status()
+        while True:
+            try:
+                response = requests.get(f"{self.api_url}/short",
+                                        params={"size":1},
+                                        headers=self.headers, timeout=2)
+                if response.status_code != 200: raise
+                
+                response = requests.get(f"{self.api_url}/short",
+                                        params={"size":response.json()["totalElements"]},
+                                        headers=self.headers, timeout=2)
+                response.raise_for_status()
+                if response.status_code == 200: break
+                else: raise
 
-            petitions = []
-            content = response.json()["content"]
-            for idx, petition in enumerate(content, start=1):
-                print(f"Fetching petition {idx} of {len(content)}")
-                petitions.append(self.fetch_petition(petition["id"]))
+            except requests.exceptions.Timeout:
+                continue
             
-            return petitions
-        except requests.exceptions.Timeout:
-            return self.fetch_petitions()
-        except:
-            raise
+        petitions = []
+        content = response.json()["content"]
+        for i, petition in enumerate(content, start=1):
+            print(f"Fetching petition {i} of {len(content)}")
+            petitions.append(self.fetch_petition(petition["id"]))
+        
+        return petitions
 
     def save_to_csv(self, petitions, csv_path):
         """
@@ -68,14 +73,11 @@ class PetitionsParser:
         petitions -- list петиций в формате json
         csv_path -- Путь к CSV файлу
         """
-        try:
-            field_names = petitions[0].keys()
-            with open(csv_path, 'w', newline='', encoding='utf-8') as csv_file:
-                writer = csv.DictWriter(csv_file, fieldnames=field_names)
-                writer.writeheader()
-                writer.writerows(petitions)
-        except:
-            raise
+        field_names = petitions[0].keys()
+        with open(csv_path, 'w', newline='', encoding='utf-8') as csv_file:
+            writer = csv.DictWriter(csv_file, fieldnames=field_names)
+            writer.writeheader()
+            writer.writerows(petitions)
 
     def run(self, csv_path):
         """
@@ -84,19 +86,14 @@ class PetitionsParser:
         Arguments:
         csv_path -- Путь к CSV файлу
         """
-        try:
-            petitions = self.fetch_petitions()
-            self.save_to_csv(petitions, csv_path)
+        petitions = self.fetch_petitions()
+        self.save_to_csv(petitions, csv_path)
+        return petitions
 
-            return petitions
-        except:
-            raise
 
 if __name__ == "__main__":
-    try:
-        parser = PetitionsParser()
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        parser.run(f"petitions_{timestamp}.csv")
-    except:
-        raise
+    parser = PetitionsParser()
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    parser.run(f"petitions_{timestamp}.csv")
+
 
