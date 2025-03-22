@@ -28,9 +28,8 @@ class PetitionsParser:
         while True:
             try:
                 response = requests.get(f"{self.api_url}/{petition_id}", headers=self.headers, timeout=1)
-                if response.status_code == 200: break
-                else: raise
-                
+                response.raise_for_status()
+                break
             except requests.exceptions.Timeout:
                 continue
         return response.json()
@@ -45,15 +44,14 @@ class PetitionsParser:
                 response = requests.get(f"{self.api_url}/short",
                                         params={"size":1},
                                         headers=self.headers, timeout=2)
-                if response.status_code != 200: raise
+                response.raise_for_status()
                 
                 response = requests.get(f"{self.api_url}/short",
                                         params={"size":response.json()["totalElements"]},
                                         headers=self.headers, timeout=2)
                 response.raise_for_status()
-                if response.status_code == 200: break
-                else: raise
-
+                break
+            
             except requests.exceptions.Timeout:
                 continue
             

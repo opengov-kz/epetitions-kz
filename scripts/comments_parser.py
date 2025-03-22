@@ -33,8 +33,8 @@ class CommentsParser:
                     response = requests.get(f"{self.api_url}/{petition_id}/comments",
                                             params={"size":1000, "page":i},
                                             headers=self.headers, timeout=3)
-                    if response.status_code == 200: break
-                    else: raise
+                    response.raise_for_status()
+                    break
                 except requests.exceptions.Timeout:
                     continue
                 
@@ -52,14 +52,13 @@ class CommentsParser:
                 response = requests.get(f"{self.api_url}/short",
                                         params={"size":1},
                                         headers=self.headers, timeout=2)
-                if response.status_code != 200: raise
+                response.raise_for_status()
                 
                 response = requests.get(f"{self.api_url}/short",
                                         params={"size":response.json()["totalElements"]},
                                         headers=self.headers, timeout=2)
                 response.raise_for_status()
-                if response.status_code == 200: break
-                else: raise
+                break
 
             except requests.exceptions.Timeout:
                 continue

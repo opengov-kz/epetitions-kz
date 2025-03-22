@@ -29,66 +29,72 @@ class SignersParser:
         INTERNAL_SERVER_ERROR:
         https://epetition.kz/api/public/v1/petitions/5e230abb-839e-4c35-ab68-83434354c8bf/signers?size=1&page=74
         """
-        try:
-            signers = []
-            for i in itertools.count():
-                response = requests.get(f"{self.api_url}/{petition_id}/signers",
-                                        params={"size":100, "page":i},
-                                        headers=self.headers, timeout=3)
-                if response.status_code == 500:
-                    for j in range(i * 100, (i + 1) * 100):
-                        response = requests.get(f"{self.api_url}/{petition_id}/signers",
-                                                params={"size":1, "page":j},
-                                                headers=self.headers, timeout=3)
-                        if response.status_code == 500:
-                            continue
-                        response.raise_for_status()
-                        signers.extend(response.json()["content"])
-                        if response.json()["last"]:
-                            break
-                    continue
-                
-                response.raise_for_status()
-                signers.extend(response.json()["content"])
-                if response.json()["last"]:
+        signers = []
+        for i in itertools.count():
+            while True:
+                try:
+                    response = requests.get(f"{self.api_url}/{petition_id}/signers",
+                                            params={"size":100, "page":i},
+                                            headers=self.headers, timeout=3)
+                    if (response.status_code == 500): break
+                    response.raise_for_status()
                     break
-
-            for signer in signers:
-                signer["petitionId"] = petition_id
-                
-            return signers
-        except requests.exceptions.Timeout:
-            return self.fetch_signers(petition_id)
-        except:
-            raise
+                except requests.exceptions.Timeout:
+                    continue
+            
+            if response.status_code == 200:
+                signers.extend(response.json()["content"])                
+            elif response.status_code == 500:
+                for j in range(i * 100, (i + 1) * 100):
+                    while True:
+                        try:
+                            response = requests.get(f"{self.api_url}/{petition_id}/signers",
+                                                    params={"size":1, "page":j},
+                                                    headers=self.headers, timeout=3)
+                            if (response.status_code == 500): break
+                            response.raise_for_status()
+                            break
+                        except requests.exceptions.Timeout:
+                            continue
+                        
+                    if response.status_code == 200:
+                        signers.extend(response.json()["content"])
+                        if response.json()["last"]: break
+            
+            if response.json()["last"]: break
+            
+        for signer in signers:
+            signer["petitionId"] = petition_id
         
-    
+        return signers
+
     def fetch_all_signers(self):
         """
         Получение всех подписей из API
         """
-        try:
-            response = requests.get(f"{self.api_url}/short",
-                                    params={"size":1},
-                                    headers=self.headers, timeout=2)
-            response.raise_for_status()
+        while True:
+            try:
+                response = requests.get(f"{self.api_url}/short",
+                                        params={"size":1},
+                                        headers=self.headers, timeout=2)
+                response.raise_for_status()
+                
+                response = requests.get(f"{self.api_url}/short",
+                                        params={"size":response.json()["totalElements"]},
+                                        headers=self.headers, timeout=2)
+                response.raise_for_status()
+                break
+
+            except requests.exceptions.Timeout:
+                continue
             
-            response = requests.get(f"{self.api_url}/short",
-                                    params={"size":response.json()["totalElements"]},
-                                    headers=self.headers, timeout=2)
-            response.raise_for_status()
+        all_signers = []
+        content = response.json()["content"]
+        for i, petition in enumerate(content, start=1):
+            print(f"Fetching signers from petition {i} of {len(content)}")
+            all_signers.extend(self.fetch_signers(petition["id"]))
             
-            all_signers = []
-            content = response.json()["content"]
-            for i, petition in enumerate(content, start=1):
-                print(f"Fetching signers from petition {i} of {len(content)}")
-                all_signers.extend(self.fetch_signers(petition["id"]))
-            
-            return all_signers
-        except requests.exceptions.Timeout:
-            return self.fetch_all_signers()
-        except:
-            raise
+        return all_signers
 
     def save_to_csv(self, all_signers, csv_path):
         """
@@ -98,14 +104,11 @@ class SignersParser:
         all_signers -- list всех подписей в формате json
         csv_path -- Путь к CSV файлу
         """
-        try:
-            field_names = all_signers[0].keys()
-            with open(csv_path, 'w', newline='', encoding='utf-8') as csv_file:
-                writer = csv.DictWriter(csv_file, fieldnames=field_names)
-                writer.writeheader()
-                writer.writerows(all_signers)
-        except:
-            raise
+        field_names = all_signers[0].keys()
+        with open(csv_path, 'w', newline='', encoding='utf-8') as csv_file:
+            writer = csv.DictWriter(csv_file, fieldnames=field_names)
+            writer.writeheader()
+            writer.writerows(all_signers)
 
     def run(self, csv_path):
         """
@@ -114,19 +117,14 @@ class SignersParser:
         Arguments:
         csv_path -- Путь к CSV файлу
         """
-        try:
-            all_signers = self.fetch_all_signers()
-            self.save_to_csv(all_signers, csv_path)
+        all_signers = self.fetch_all_signers()
+        self.save_to_csv(all_signers, csv_path)
+        return all_signers
 
-            return all_signers
-        except:
-            raise
 
 if __name__ == "__main__":
-    try:    
-        parser = SignersParser()
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        parser.run(f"signers_{timestamp}.csv")
-    except:
-        raise
+    parser = SignersParser()
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    parser.run(f"signers_{timestamp}.csv")
+
 
