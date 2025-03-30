@@ -127,7 +127,16 @@ class PetitionsParser:
 
 
 if __name__ == "__main__":
+    import argparse
+    arg_parser = argparse.ArgumentParser(prog="petition parser")
+    arg_parser.add_argument("-f", "--filename")
+    args = arg_parser.parse_args()
+    
     parser = PetitionsParser()
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    parser.run(f"petitions_{timestamp}.csv")
+
+    if args.filename:
+        parser.run(f"{args.filename}.csv")
+    else:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        parser.run(f"petitions_{timestamp}.csv")
 
