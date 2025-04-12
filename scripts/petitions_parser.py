@@ -31,6 +31,7 @@ class PetitionsParser:
             'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36'
         }
 
+
     def remove_cover_file_from_petition(self, petition):
         """
         Удаление файла обложки из петиции
@@ -40,6 +41,7 @@ class PetitionsParser:
         """
         if petition["cover"]:
             petition["cover"].pop("fileData", None)
+
 
     def fetch_petition(self, petition_id):
         """
@@ -59,6 +61,7 @@ class PetitionsParser:
                     requests.exceptions.ConnectionError):
                 continue
         return response.json()
+
 
     def fetch_petition_list_page(self, size, page):
         """
@@ -81,6 +84,7 @@ class PetitionsParser:
                 continue
         return response.json()
 
+
     def save_to_csv(self, petition, csv_path):
         """
         Сохранение петиции в CSV файл
@@ -98,6 +102,7 @@ class PetitionsParser:
                 writer.writeheader()
             writer.writerow(petition)
 
+
     def run(self, csv_path):
         """
         Парсинг петиций и сохранение в CSV файле
@@ -105,30 +110,25 @@ class PetitionsParser:
         Arguments:
         csv_path -- путь к CSV файлу
         """
+        silent_remove(csv_path)
         try:
-            temp_csv_path = f"{csv_path}.temp"
-            
             for i in itertools.count():
                 petition_list_page = self.fetch_petition_list_page(self.max_page_size, i)
                 
                 for short_petition in petition_list_page["content"]:
                     petition = self.fetch_petition(short_petition["id"])
                     self.remove_cover_file_from_petition(petition)
-                    self.save_to_csv(petition, temp_csv_path)
+                    self.save_to_csv(petition, csv_path)
                 
                 if petition_list_page["last"]:
                     break
         except:
-            silent_remove(temp_csv_path)
+            silent_remove(csv_path)
             raise
-        
-        silent_remove(csv_path)
-        os.rename(temp_csv_path, csv_path)
-
 
 if __name__ == "__main__":
     import argparse
-    arg_parser = argparse.ArgumentParser(prog="petition parser")
+    arg_parser = argparse.ArgumentParser(prog="petitions parser")
     arg_parser.add_argument("-f", "--filename")
     args = arg_parser.parse_args()
     

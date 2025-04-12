@@ -2,6 +2,7 @@ import requests
 import json
 import csv
 from datetime import datetime
+from datetime import timedelta
 import os
 import itertools
 import errno
@@ -30,14 +31,44 @@ class CommentsParser:
             'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36'
         }
     
-    def fetch_comments(self, petition_id):
+    def get_new_comments_from_list(self, comments):
         """
-        Получение комментариев одной петиции из API
+        Получение новых комментариев из списка
+
+        Arguments:
+        comments -- list комментариев
+        """
+        left, right = 0, len(comments)
+        while left < right:
+            mid = left + (right - left) // 2
+            created_date = datetime.fromisoformat(comments[mid]["createdDate"][:19])
+            if created_date > self.last_parsing_datetime:
+                left = mid + 1
+            else:
+                right = mid
+        first_old_comment = left
+        
+        for i in itertools.count():
+            if i == len(comments):
+                first_new_comment = i
+                break
+            created_date = datetime.fromisoformat(comments[i]["createdDate"][:19])
+            if created_date <= self.new_last_parsing_datetime:
+                first_new_comment = i
+                break
+        
+        return {"content":comments[first_new_comment:first_old_comment],
+                "last": False if first_old_comment == len(comments) else True}
+
+
+    def fetch_new_comments(self, petition_id):
+        """
+        Получение новых комментариев одной петиции из API
 
         Arguments:
         petition_id -- id петиции
         """
-        comments = []
+        all_comments = []
         for i in itertools.count():
             while True:
                 try:
@@ -47,13 +78,17 @@ class CommentsParser:
                                             timeout=self.timeout)
                     response.raise_for_status()
                     break
-                except requests.exceptions.Timeout:
+                except (requests.exceptions.Timeout,
+                        requests.exceptions.ConnectionError):
                     continue
             
-            comments.extend(response.json()["content"])
-            if response.json()["last"]:
+            comments = self.get_new_comments_from_list(response.json()["content"])
+            all_comments.extend(comments["content"])
+            
+            if comments["last"] or response.json()["last"]:
                 break
-        return comments
+        return all_comments
+
 
     def fetch_petition_list_page(self, size, page):
         """
@@ -71,9 +106,11 @@ class CommentsParser:
                                         timeout=self.timeout)
                 response.raise_for_status()
                 break
-            except requests.exceptions.Timeout:
+            except (requests.exceptions.Timeout,
+                    requests.exceptions.ConnectionError):
                 continue
         return response.json()
+
 
     def save_to_csv(self, comments, csv_path):
         """
@@ -94,27 +131,39 @@ class CommentsParser:
                 writer.writeheader()
             writer.writerows(comments)
 
+
     def run(self, csv_path):
         """
-        Парсинг всех комментариев и сохранение в CSV файле
+        Парсинг новых комментариев, либо всех при первом запуске, и сохранение в CSV файле
         
         Arguments:
         csv_path -- Путь к CSV файлу
         """
+        try:
+            with open("last_parsing_of_comments.txt", "r") as f:
+                self.last_parsing_datetime = datetime.fromisoformat(f.read())
+        except:
+            self.last_parsing_datetime = datetime.fromisoformat("1900-01-01T00:00:00")   
+        self.new_last_parsing_datetime = datetime.now().replace(microsecond=0) - timedelta(seconds=1)
+        
         silent_remove(csv_path)
         try:
             for i in itertools.count():
                 petition_list_page = self.fetch_petition_list_page(self.max_page_size, i)
 
                 for short_petition in petition_list_page["content"]:
-                    comments = self.fetch_comments(short_petition["id"])
+                    comments = self.fetch_new_comments(short_petition["id"])
                     self.save_to_csv(comments, csv_path)
 
                 if petition_list_page["last"]:
                     break
+                
+            with open("last_parsing_of_comments.txt", "w") as f:
+                f.write(self.new_last_parsing_datetime.isoformat())
         except:
             silent_remove(csv_path)
             raise
+
 
 if __name__ == "__main__":
     import argparse
@@ -123,11 +172,10 @@ if __name__ == "__main__":
     args = arg_parser.parse_args()
     
     parser = CommentsParser()
-
+    
     if args.filename:
         parser.run(f"{args.filename}.csv")
     else:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         parser.run(f"comments_{timestamp}.csv")
-
 

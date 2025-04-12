@@ -5,15 +5,21 @@ import itertools
 import psycopg2
 
 class PetitionsDatabaseLoader:
-    def __init__(self, conn):
+    def __init__(self, conn, csv_path):
         """
         Инициализация загрузчика петиций в базу данных
 
         Arguments:
         conn -- соединение с базой данных (psycopg2.connect)
+        csv_path -- путь к CSV файлу
         """
         self.conn = conn
         with conn.cursor() as curs:
+            curs.execute("""SELECT EXISTS(
+                                SELECT FROM information_schema.tables
+                                WHERE table_schema = 'public'
+                                AND    table_name   = 'petitions');""")
+            print(curs.fetchone())
             curs.execute("""CREATE TABLE "petitions" (
                               "id" int,
                               "uuid" uuid,
@@ -40,6 +46,6 @@ class PetitionsDatabaseLoader:
             conn.commit()
             
 
-conn = psycopg2.connect("postgres://postgres:test@localhost:5432/test")
+conn = psycopg2.connect("postgres://postgres:arman@localhost:5432/test")
 
-petitions_db_loader = PetitionsDatabaseLoader(conn)
+petitions_db_loader = PetitionsDatabaseLoader(conn, "test.csv")
